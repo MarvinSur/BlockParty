@@ -200,6 +200,7 @@ public class Arena {
         } else {
             for (PlayerInfo playerInfo : playersInArena) {
                 Player player = playerInfo.asPlayer();
+                if (player == null) continue;
                 player.getInventory().clear();
                 player.teleport(data.lobbySpawn);
                 player.setHealth(20);
@@ -215,11 +216,28 @@ public class Arena {
             }
         }
 
+        // FIX: Reset semua state player SPECTATING ke INLOBBY supaya mereka bisa ikut ronde berikutnya
+        for (PlayerInfo playerInfo : playersInArena) {
+            if (playerInfo.getPlayerState() == PlayerState.SPECTATING
+                    || playerInfo.getPlayerState() == PlayerState.WINNER) {
+                playerInfo.setPlayerState(PlayerState.INLOBBY);
+                Player player = playerInfo.asPlayer();
+                if (player != null) {
+                    player.setGameMode(GameMode.ADVENTURE);
+                }
+            }
+        }
+
         this.arenaState = ArenaState.LOBBY;
         this.gameState = GameState.WAIT;
-        this.data.floor.setStartFloor();
-        this.phaseHandler.cancelWinningPhase();
+
+        // FIX: cancelAll() dulu sebelum dispose PhaseHandler lama.
+        // Ini mencegah scheduler GamePhase/WinnerPhase zombie yang masih jalan
+        // setelah reset dan menyebabkan FloorPlaceEvent terpanggil di lobby baru.
+        this.phaseHandler.cancelAll();
         this.phaseHandler = new PhaseHandler(blockParty, this);
+
+        this.data.floor.setStartFloor();
         this.data.songManager.setVotedSong(null);
         this.phaseHandler.startLobbyPhase();
 

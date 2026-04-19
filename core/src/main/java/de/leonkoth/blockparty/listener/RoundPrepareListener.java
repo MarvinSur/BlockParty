@@ -6,6 +6,7 @@ import de.leonkoth.blockparty.event.RoundPrepareEvent;
 import de.leonkoth.blockparty.util.ColorBlock;
 import de.leonkoth.blockparty.util.Util;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -34,7 +35,14 @@ public class RoundPrepareListener implements Listener {
             symbols += '█';
 
         String message = "§" + colorCode + symbols + "§f§l " + colorName + " §" + colorCode + symbols;
-        Util.showActionBar(message, arena, false);
+
+        if (blockParty.isBroadcastGlobalActionbar()) {
+            for (Player online : Bukkit.getOnlinePlayers()) {
+                Util.showActionBarToPlayer(message, online);
+            }
+        } else {
+            Util.showActionBar(message, arena, false);
+        }
     }
 
 }

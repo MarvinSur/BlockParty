@@ -9,6 +9,7 @@ import de.leonkoth.blockparty.player.PlayerInfo;
 import de.leonkoth.blockparty.player.PlayerState;
 import de.pauhull.utils.image.ChatFace;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -34,15 +35,11 @@ public class PlayerWinListener implements Listener {
     public void onPlayerWin(PlayerWinEvent event) {
 
         Arena arena = event.getArena();
-        //Player player = event.getPlayer();
         List<PlayerInfo> playerInfos = event.getPlayerInfo();
 
         arena.getPhaseHandler().cancelGamePhase();
-        //if (arena.getSongManager().getVotedSong() != null) {
         arena.getSongManager().stop(this.blockParty);
         arena.setGameState(GameState.WAIT);
-        //}
-
         arena.setArenaState(ArenaState.ENDING);
 
         arena.getFloor().clearInventories();
@@ -54,18 +51,29 @@ public class PlayerWinListener implements Listener {
             if (player != null) {
 
                 chatFace.getLinesAsync(player.getName(), lines -> {
-
+                    // Kirim face ke arena player
                     for (PlayerInfo allPlayerInfo : arena.getPlayersInArena()) {
                         Player allPlayers = allPlayerInfo.asPlayer();
-
-                        for (String line : lines) {
-                            allPlayers.sendMessage(PREFIX + line);
+                        if (allPlayers != null) {
+                            for (String line : lines) {
+                                allPlayers.sendMessage(PREFIX + line);
+                            }
                         }
                     }
 
-                    arena.broadcast(PREFIX, WINNER_ANNOUNCE_ALL, false, playerInfo, "%PLAYER%", player.getName());
+                    // Winner announcement
+                    String winnerMsg = PREFIX.toString() + "&7[&e" + arena.getName() + "&7] Player &e" + player.getName() + " &7won the game!";
+                    String translated = ChatColor.translateAlternateColorCodes('&', winnerMsg);
+
+                    if (blockParty.isBroadcastGlobalWinner()) {
+                        Bukkit.broadcastMessage(translated);
+                    } else {
+                        arena.broadcast(PREFIX, WINNER_ANNOUNCE_ALL, false, playerInfo, "%PLAYER%", player.getName());
+                    }
+
                     WINNER_ANNOUNCE_SELF.message(PREFIX, player);
                 });
+
                 player.teleport(arena.getGameSpawn());
             }
 
@@ -74,8 +82,8 @@ public class PlayerWinListener implements Listener {
             this.blockParty.getPlayerInfoManager().savePlayerInfo(playerInfo);
         }
 
-
-        arena.getPhaseHandler().startWinningPhase(null);
+        // FIX: pass winner list yang bener
+        arena.getPhaseHandler().startWinningPhase(playerInfos);
     }
 
 }

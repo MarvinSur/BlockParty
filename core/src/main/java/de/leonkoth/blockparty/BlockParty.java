@@ -109,6 +109,26 @@ public class BlockParty {
     @Getter
     private HttpClient client;
 
+    // --- Broadcast config ---
+    @Getter
+    private boolean broadcastGlobalJoinLeave;
+
+    @Getter
+    private boolean broadcastGlobalCountdown;
+
+    @Getter
+    private boolean broadcastGlobalWinner;
+
+    @Getter
+    private boolean broadcastGlobalActionbar;
+
+    // --- AutoJoin config ---
+    @Getter
+    private boolean autoJoinEnabled;
+
+    @Getter
+    private String autoJoinPreferredArena;
+
     public BlockParty(JavaPlugin plugin, Config config, ExecutorService executorService, ScheduledExecutorService scheduledExecutorService) {
         instance = this;
 
@@ -371,6 +391,16 @@ public class BlockParty {
             arenaPrivateChat = !config.getConfig().isBoolean("Chat.ArenaPrivateChat") || config.getConfig().getBoolean("Chat.ArenaPrivateChat");
             signsEnabled = !config.getConfig().isBoolean("JoinSigns.Enabled") || config.getConfig().isBoolean("JoinSigns.Enabled");
 
+            // Broadcast config
+            broadcastGlobalJoinLeave = config.getConfig().getBoolean("Broadcast.GlobalJoinLeave", true);
+            broadcastGlobalCountdown  = config.getConfig().getBoolean("Broadcast.GlobalCountdown", true);
+            broadcastGlobalWinner     = config.getConfig().getBoolean("Broadcast.GlobalWinner", true);
+            broadcastGlobalActionbar  = config.getConfig().getBoolean("Broadcast.GlobalActionbar", true);
+
+            // AutoJoin config
+            autoJoinEnabled        = config.getConfig().getBoolean("AutoJoin.Enabled", false);
+            autoJoinPreferredArena = config.getConfig().getString("AutoJoin.PreferredArena", "");
+
             if(Bukkit.getScheduler().isCurrentlyRunning(signUpdaterTask)) {
                 Bukkit.getScheduler().cancelTask(signUpdaterTask);
             }
@@ -384,6 +414,36 @@ public class BlockParty {
 
     public boolean isTimoCloud() {
         return Bukkit.getPluginManager().getPlugin("TimoCloud") != null;
+    }
+
+    /**
+     * Cari arena yang paling banyak playernya dan masih bisa join (LOBBY atau allowJoinDuringGame).
+     * Kalau PreferredArena di-set, prioritaskan itu.
+     */
+    public Arena findBestAutoJoinArena() {
+        if (!autoJoinEnabled || arenas == null || arenas.isEmpty()) return null;
+
+        // Coba preferred arena dulu
+        if (autoJoinPreferredArena != null && !autoJoinPreferredArena.isEmpty()) {
+            Arena preferred = Arena.getByName(autoJoinPreferredArena);
+            if (preferred != null && preferred.isEnabled()
+                    && preferred.getPlayersInArena().size() < preferred.getMaxPlayers()) {
+                return preferred;
+            }
+        }
+
+        // Fallback: arena dengan player terbanyak yang masih bisa join
+        Arena best = null;
+        int maxPlayers = -1;
+        for (Arena arena : arenas) {
+            if (!arena.isEnabled()) continue;
+            if (arena.getPlayersInArena().size() >= arena.getMaxPlayers()) continue;
+            if (arena.getPlayersInArena().size() > maxPlayers) {
+                maxPlayers = arena.getPlayersInArena().size();
+                best = arena;
+            }
+        }
+        return best;
     }
 
 }

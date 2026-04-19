@@ -17,6 +17,9 @@ import java.io.File;
  * Created by Leon on 15.03.2018.
  * Project Blockparty2
  * © 2016 - Leon Koth
+ *
+ * FEATURE: AutoJoin — kalau AutoJoin.Enabled = true di config,
+ * player yang join server otomatis masuk arena yang paling rame (atau PreferredArena).
  */
 public class PlayerJoinListener implements Listener {
 
@@ -50,13 +53,36 @@ public class PlayerJoinListener implements Listener {
             }
         }
 
-        Arena arena = Arena.getByName(blockParty.getDefaultArena());
-        if (blockParty.isBungee() && arena != null) {
-            String error = arena.addPlayer(player).getCancelMessage();
-            if (error != null) {
-                player.kickPlayer(error);
+        // BungeeCord mode: langsung masuk default arena
+        if (blockParty.isBungee()) {
+            Arena arena = Arena.getByName(blockParty.getDefaultArena());
+            if (arena != null) {
+                String error = arena.addPlayer(player).getCancelMessage();
+                if (error != null) {
+                    player.kickPlayer(error);
+                }
             }
             event.setJoinMessage(null);
+            return;
+        }
+
+        // AutoJoin mode: delay 1 tick supaya player fully loaded dulu
+        if (blockParty.isAutoJoinEnabled()) {
+            final Player finalPlayer = player;
+            Bukkit.getScheduler().runTaskLater(blockParty.getPlugin(), () -> {
+                // Cek ulang apakah player masih online dan belum di arena
+                if (!finalPlayer.isOnline()) return;
+                PlayerInfo pi = PlayerInfo.getFromPlayer(finalPlayer);
+                if (pi == null || pi.getPlayerState() != PlayerState.DEFAULT) return;
+
+                Arena target = blockParty.findBestAutoJoinArena();
+                if (target != null) {
+                    String error = target.addPlayer(finalPlayer).getCancelMessage();
+                    if (error != null) {
+                        finalPlayer.sendMessage(org.bukkit.ChatColor.RED + "[BlockParty] Auto join failed: " + error);
+                    }
+                }
+            }, 10L); // 10 tick = 0.5 detik
         }
     }
 

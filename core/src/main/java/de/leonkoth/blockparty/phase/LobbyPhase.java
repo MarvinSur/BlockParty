@@ -8,6 +8,7 @@ import de.leonkoth.blockparty.util.Util;
 import de.pauhull.utils.misc.MinecraftVersion;
 import lombok.Getter;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 
@@ -21,6 +22,10 @@ import static de.pauhull.utils.misc.MinecraftVersion.v1_13;
  * Created by Leon on 15.03.2018.
  * Project Blockparty2
  * © 2016 - Leon Koth
+ *
+ * FIX + FEATURE: Countdown sekarang bisa di-broadcast ke semua player online
+ * berdasarkan config Broadcast.GlobalCountdown.
+ * Actionbar countdown juga bisa di-broadcast global via Broadcast.GlobalActionbar.
  */
 public class LobbyPhase implements Runnable {
 
@@ -76,22 +81,23 @@ public class LobbyPhase implements Runnable {
                 players.add(playerInfo.asPlayer());
             }
 
-            if (countdown == 60 ||
-                    countdown == 30 ||
-                    countdown == 20 ||
-                    countdown == 15 ||
-                    countdown == 10 ||
-                    countdown == 5 ||
-                    countdown == 4 ||
-                    countdown == 3 ||
-                    countdown == 2 ||
-                    countdown == 1) {
+            boolean isCountdownTick = (countdown == 60 || countdown == 30 || countdown == 20
+                    || countdown == 15 || countdown == 10 || countdown == 5
+                    || countdown == 4 || countdown == 3 || countdown == 2 || countdown == 1);
 
+            if (isCountdownTick) {
                 for (Player player : players) {
                     player.playSound(player.getLocation(), sound, 1, 1);
                 }
 
-                arena.broadcast(PREFIX, TIME_LEFT, false, (PlayerInfo[]) null, "%TIME%", Integer.toString(countdown));
+                // Countdown broadcast: ALL atau arena saja
+                String countdownText = PREFIX.toString() + "&7[&e" + arena.getName() + "&7] Game starts in &e" + countdown + " &7seconds";
+                String translated = ChatColor.translateAlternateColorCodes('&', countdownText);
+                if (blockParty.isBroadcastGlobalCountdown()) {
+                    Bukkit.broadcastMessage(translated);
+                } else {
+                    arena.broadcast(PREFIX, TIME_LEFT, false, (PlayerInfo[]) null, "%TIME%", Integer.toString(countdown));
+                }
             }
 
             for (Player player : players) {
@@ -100,8 +106,16 @@ public class LobbyPhase implements Runnable {
                 player.setExp(exp);
             }
 
+            // Actionbar countdown: broadcast ke semua atau arena saja
+            String actionbarMsg = ACTIONBAR_COUNTDOWN.toString("%NUMBER%", Integer.toString(countdown));
             try {
-                Util.showActionBar(ACTIONBAR_COUNTDOWN.toString("%NUMBER%", Integer.toString(countdown)), arena, false);
+                if (blockParty.isBroadcastGlobalActionbar()) {
+                    for (Player online : Bukkit.getOnlinePlayers()) {
+                        Util.showActionBarToPlayer(actionbarMsg, online);
+                    }
+                } else {
+                    Util.showActionBar(actionbarMsg, arena, false);
+                }
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -113,15 +127,11 @@ public class LobbyPhase implements Runnable {
 
             for(PlayerInfo info : arena.getPlayersInArena()) {
                 Player player = info.asPlayer();
-                player.setExp(0);
-                player.setLevel(0);
+                if (player != null) {
+                    player.setExp(0);
+                    player.setLevel(0);
+                }
             }
-
-            arena.getPlayersInArena().forEach(info -> {
-                Player player = info.asPlayer();
-                player.setExp(0);
-                player.setLevel(0);
-            });
 
             countdown = -1;
         }

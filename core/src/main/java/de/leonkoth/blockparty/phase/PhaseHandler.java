@@ -14,6 +14,10 @@ import java.util.List;
  * Created by Leon on 16.03.2018.
  * Project Blockparty2
  * © 2016 - Leon Koth
+ *
+ * FIX: cancelGamePhase() sekarang juga memanggil gamePhase.cancel() untuk
+ * mencegah run() lama masih jalan 1 tick setelah scheduler di-cancel.
+ * Tambah cancelAll() untuk dipakai Arena.reset().
  */
 public class PhaseHandler {
 
@@ -41,7 +45,9 @@ public class PhaseHandler {
     }
 
     public boolean startLobbyPhase() {
-        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers() && !scheduler.isCurrentlyRunning(lobbyPhaseScheduler) && !scheduler.isQueued(lobbyPhaseScheduler)) {
+        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers()
+                && !scheduler.isCurrentlyRunning(lobbyPhaseScheduler)
+                && !scheduler.isQueued(lobbyPhaseScheduler)) {
             arena.setArenaState(ArenaState.LOBBY);
             this.lobbyPhase = new LobbyPhase(blockParty, arena.getName());
             this.lobbyPhase.initialize();
@@ -53,7 +59,9 @@ public class PhaseHandler {
     }
 
     public boolean startGamePhase() {
-        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers() && !scheduler.isCurrentlyRunning(gamePhaseScheduler) && !scheduler.isQueued(gamePhaseScheduler)) {
+        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers()
+                && !scheduler.isCurrentlyRunning(gamePhaseScheduler)
+                && !scheduler.isQueued(gamePhaseScheduler)) {
             arena.setArenaState(ArenaState.INGAME);
             this.gamePhase = new GamePhase(blockParty, arena.getName());
             this.gamePhase.initialize();
@@ -66,7 +74,10 @@ public class PhaseHandler {
     }
 
     public boolean startWinningPhase(List<PlayerInfo> winner) {
-        if (!scheduler.isCurrentlyRunning(winnerPhaseScheduler) && !scheduler.isCurrentlyRunning(gamePhaseScheduler) && !scheduler.isQueued(winnerPhaseScheduler) && !scheduler.isQueued(gamePhaseScheduler)) {
+        if (!scheduler.isCurrentlyRunning(winnerPhaseScheduler)
+                && !scheduler.isCurrentlyRunning(gamePhaseScheduler)
+                && !scheduler.isQueued(winnerPhaseScheduler)
+                && !scheduler.isQueued(gamePhaseScheduler)) {
             this.winnerPhase = new WinnerPhase(blockParty, arena, winner);
             winnerPhaseScheduler = scheduler.scheduleSyncRepeatingTask(blockParty.getPlugin(), winnerPhase, 0L, 20L);
             return true;
@@ -83,8 +94,23 @@ public class PhaseHandler {
         Bukkit.getScheduler().cancelTask(winnerPhaseScheduler);
     }
 
+    /**
+     * FIX: Cancel scheduler DAN set flag cancelled di GamePhase,
+     * supaya run() yang mungkin sedang antri di queue ngga jalan lagi.
+     */
     public void cancelGamePhase() {
+        gamePhase.cancel(); // FIX: tandai cancelled dulu
         Bukkit.getScheduler().cancelTask(gamePhaseScheduler);
+    }
+
+    /**
+     * FIX: Cancel semua scheduler sekaligus. Dipanggil oleh Arena.reset()
+     * sebelum membuat PhaseHandler baru, supaya ngga ada scheduler zombie.
+     */
+    public void cancelAll() {
+        cancelLobbyPhase();
+        cancelGamePhase();
+        cancelWinningPhase();
     }
 
 }

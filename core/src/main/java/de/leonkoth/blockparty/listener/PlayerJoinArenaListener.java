@@ -78,7 +78,19 @@ public class PlayerJoinArenaListener implements Listener {
         player.setExp(0);
         playerInfo.setCurrentArena(arena);
         arena.getPlayersInArena().add(playerInfo);
-        arena.broadcast(PREFIX, PLAYER_JOINED_GAME, false, playerInfo, "%PLAYER%", player.getName());
+
+        // Hitung player SETELAH masuk
+        int currentPlayers = arena.getPlayersInArena().size();
+        int maxPlayers = arena.getMaxPlayers();
+        String countTag = "&8[&e" + currentPlayers + "&7/&e" + maxPlayers + "&8]";
+
+        // Broadcast join ke ALL atau arena saja
+        String joinMsg = PREFIX.toString() + countTag + " &7" + player.getName() + " joined &e" + arena.getName();
+        if (blockParty.isBroadcastGlobalJoinLeave()) {
+            Bukkit.broadcastMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', joinMsg));
+        } else {
+            arena.broadcast(PREFIX, PLAYER_JOINED_GAME, false, playerInfo, "%PLAYER%", player.getName());
+        }
 
         player.getInventory().setItem(8, ItemType.LEAVEARENA.getItem());
         if(arena.isEnableVoteItem())

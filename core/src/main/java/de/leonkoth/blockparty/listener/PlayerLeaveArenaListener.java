@@ -41,7 +41,18 @@ public class PlayerLeaveArenaListener implements Listener {
 
         this.blockParty.getPlayerInfoManager().savePlayerInfo(playerInfo);
 
-        arena.broadcast(PREFIX, PLAYER_LEFT_GAME, false, playerInfo, "%PLAYER%", player.getName());
+        // Hitung sisa player SETELAH keluar (remove sudah dipanggil sebelum event ini, jadi pakai size langsung)
+        int currentPlayers = arena.getPlayersInArena().size();
+        int maxPlayers = arena.getMaxPlayers();
+        String countTag = "&8[&e" + currentPlayers + "&7/&e" + maxPlayers + "&8]";
+
+        // Broadcast leave ke ALL atau arena saja
+        String leaveMsg = PREFIX.toString() + countTag + " &7" + player.getName() + " left &e" + arena.getName();
+        if (blockParty.isBroadcastGlobalJoinLeave()) {
+            Bukkit.broadcastMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&', leaveMsg));
+        } else {
+            arena.broadcast(PREFIX, PLAYER_LEFT_GAME, false, playerInfo, "%PLAYER%", player.getName());
+        }
 
         if (arena.getArenaState() == ArenaState.INGAME) {
             arena.eliminate(playerInfo);

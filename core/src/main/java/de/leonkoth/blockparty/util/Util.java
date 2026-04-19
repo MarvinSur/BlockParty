@@ -32,6 +32,14 @@ public class Util {
 
     }
 
+    /**
+     * Kirim actionbar ke satu player tertentu (untuk global broadcast).
+     */
+    public static void showActionBarToPlayer(String message, Player player) {
+        ActionBarMessage actionBarMessage = new ActionBarMessage(ChatColor.translateAlternateColorCodes('&', message));
+        actionBarMessage.send(player);
+    }
+
     public static boolean hasInterface(Class<?> clazz, Class<?> interfaze) {
         boolean hasInterface = false;
         for (Class<?> interfazze : clazz.getInterfaces()) {

@@ -100,4 +100,28 @@ Database:
     Username: username
     Password: password
 
-# End of  configuration
+# Broadcast Settings
+# Controls which messages are sent globally (to all online players) vs arena-only
+Broadcast:
+  # Broadcast join/leave messages to ALL online players (not just arena players)
+  GlobalJoinLeave: True
+
+  # Broadcast countdown messages to ALL online players
+  GlobalCountdown: True
+
+  # Broadcast winner announcement to ALL online players
+  GlobalWinner: True
+
+  # Broadcast countdown actionbar to ALL online players
+  GlobalActionbar: True
+
+# Auto Join Feature
+# When enabled, players who join the server are automatically placed into an active arena
+AutoJoin:
+  # Enable auto join on server join
+  Enabled: False
+
+  # Preferred arena to auto-join. Leave empty ("") to pick the arena with most players
+  PreferredArena: ""
+
+# End of configuration
