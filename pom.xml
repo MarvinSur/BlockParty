@@ -19,6 +19,13 @@
     </modules>
     <packaging>pom</packaging>
     <name>BlockParty</name>
+    
+    <repositories>
+        <repository>
+            <id>elmakers</id>
+            <url>https://maven.elmakers.com/repository/</url>
+        </repository>
+    </repositories>
 
     <dependencies>
         <!-- Lombok -->
