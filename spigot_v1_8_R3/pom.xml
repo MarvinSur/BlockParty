@@ -18,21 +18,22 @@
             <id>spigot</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
-        <!-- FIX: bungeecord-chat 1.8-SNAPSHOT transitive dep tersedia di sini -->
+        <!-- FIX: bungeecord-chat:1.8-SNAPSHOT (transitive dep dari spigot-api 1.8.8)
+             ada di PaperMC repo. Sonatype dan md-5.net 404 untuk artifact ini. -->
         <repository>
-            <id>sonatype-oss-public</id>
-            <url>https://oss.sonatype.org/content/groups/public/</url>
+            <id>papermc</id>
+            <url>https://repo.papermc.io/repository/maven-public/</url>
         </repository>
     </repositories>
 
     <dependencies>
-        <!-- FIX: Sama seperti api module — spigot-api 1.8.8 punya transitive dep
-             bungeecord-chat:1.8-SNAPSHOT yang artifact-nya udah hilang dari sonatype snapshots.
-             Upgrade ke 1.13 agar resolusi dependency bersih. -->
+        <!-- JANGAN di-upgrade ke 1.13+ — kode ini pakai Material names lama 1.8
+             (STAINED_CLAY, WOOL, CARPET, SKULL_ITEM, block.setData, dll)
+             yang semua sudah dihapus di Bukkit API 1.13+. -->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
-            <version>1.13-R0.1-SNAPSHOT</version>
+            <version>1.8.8-R0.1-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>
 
