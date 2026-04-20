@@ -11,11 +11,39 @@
 
     <artifactId>blockparty-api</artifactId>
     <version>${project.parent.version}</version>
+    <packaging>jar</packaging>
+
+    <repositories>
+        <repository>
+            <id>spigot</id>
+            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
+        </repository>
+        <!-- FIX: bungeecord-chat 1.8-SNAPSHOT transitive dep dari spigot-api 1.8.8
+             tersedia di repo ini, bukan di sonatype-nexus-snapshots -->
+        <repository>
+            <id>sonatype-oss-public</id>
+            <url>https://oss.sonatype.org/content/groups/public/</url>
+        </repository>
+    </repositories>
+
+    <dependencies>
+        <!-- FIX: Upgrade spigot-api dari 1.8.8 ke 1.13-R0.1-SNAPSHOT.
+             spigot-api 1.8.8 punya transitive dependency bungeecord-chat:1.8-SNAPSHOT
+             yang udah tidak tersedia di repo manapun yang masih hidup.
+             1.13+ sudah bundle bungeecord-chat langsung tanpa SNAPSHOT lama. -->
+        <dependency>
+            <groupId>org.spigotmc</groupId>
+            <artifactId>spigot-api</artifactId>
+            <version>1.13-R0.1-SNAPSHOT</version>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
     <build>
         <plugins>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.7.0</version>
+                <version>3.8.1</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -24,27 +52,5 @@
             </plugin>
         </plugins>
     </build>
-    <packaging>jar</packaging>
-
-    <repositories>
-        <repository>
-            <id>spigot</id>
-            <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
-        </repository>
-
-    </repositories>
-
-    <dependencies>
-
-        <!--Spigot API-->
-        <dependency>
-            <groupId>org.spigotmc</groupId>
-            <artifactId>spigot-api</artifactId>
-            <version>1.8.8-R0.1-SNAPSHOT</version>
-            <scope>provided</scope>
-        </dependency>
-
-    </dependencies>
-
 
 </project>
