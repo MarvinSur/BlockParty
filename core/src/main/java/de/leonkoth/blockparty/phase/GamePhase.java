@@ -1,6 +1,5 @@
 package de.leonkoth.blockparty.phase;
 
-import cloud.timo.TimoCloud.api.TimoCloudAPI;
 import de.leonkoth.blockparty.BlockParty;
 import de.leonkoth.blockparty.arena.Arena;
 import de.leonkoth.blockparty.arena.GameState;
@@ -23,17 +22,18 @@ import static de.leonkoth.blockparty.locale.BlockPartyLocale.ACTIONBAR_STOP;
  * Project Blockparty2
  * © 2016 - Leon Koth
  *
+ * FIX: Removed direct TimoCloud import (cloud.timo.TimoCloud.api.TimoCloudAPI).
+ * TimoCloud integration is now done via reflection inside BlockParty.setTimoCloudState()
+ * so this class compiles without the TimoCloud JAR on the classpath.
+ *
  * FIX: Replaced all double-based time tracking with integer tick counters
  * to eliminate floating point drift bugs on high-load servers (80+ players).
- * Scheduler runs every 2 ticks = 10 ticks/second.
- * All "time in seconds" values are multiplied by 10 for tick conversion.
  */
 public class GamePhase implements Runnable {
 
-    // Flag guard untuk setiap fase
     private boolean firstStopEnter = true, firstDanceEnter = true, firstPrepareEnter = true, firstEnter = true;
 
-    // Semua waktu dalam satuan TICKS (10 tick = 1 detik, karena scheduler 2L / 20 tps)
+    // Semua waktu dalam satuan TICKS (10 tick = 1 detik, scheduler jalan tiap 2L)
     private int timeToSearchTicks, currentTimeToSearchTicks, currentTick;
     private int stopTimeTicks, preparingTimeTicks;
 
@@ -41,7 +41,7 @@ public class GamePhase implements Runnable {
     private int levelAmount, currentLevel;
 
     @Getter
-    private int stopTime = 4; // tetap dalam detik untuk kompatibilitas getter
+    private int stopTime = 4;
 
     private boolean cancelled = false;
 
@@ -58,14 +58,13 @@ public class GamePhase implements Runnable {
         this.blockParty = blockParty;
         this.arena = arena;
 
-        // Konversi semua ke ticks (×10 karena scheduler 2 tick = 0.1 detik)
         this.timeToSearchTicks = arena.getTimeToSearch() * 10;
         this.currentTimeToSearchTicks = timeToSearchTicks;
         this.timeReductionPerLevel = arena.getTimeReductionPerLevel();
         this.timeModifier = arena.getTimeModifier();
         this.levelAmount = arena.getLevelAmount();
-        this.stopTimeTicks = stopTime * 10;       // 4 detik = 40 ticks
-        this.preparingTimeTicks = 5 * 10;         // 5 detik = 50 ticks
+        this.stopTimeTicks = stopTime * 10;
+        this.preparingTimeTicks = 5 * 10;
         this.currentTick = 0;
     }
 
@@ -89,15 +88,10 @@ public class GamePhase implements Runnable {
         GameStartEvent event = new GameStartEvent(arena);
         Bukkit.getPluginManager().callEvent(event);
 
-        if (blockParty.isTimoCloud()) {
-            TimoCloudAPI.getBukkitAPI().getThisServer().setState("INGAME");
-        }
+        // FIX: Pakai helper reflection — tidak perlu import TimoCloud langsung
+        blockParty.setTimoCloudState("INGAME");
     }
 
-    /**
-     * Dipanggil saat game sudah selesai / di-cancel dari luar.
-     * Mencegah run() melanjutkan eksekusi setelah arena di-reset.
-     */
     public void cancel() {
         this.cancelled = true;
     }
@@ -121,21 +115,18 @@ public class GamePhase implements Runnable {
         PlayerWinEvent event = new PlayerWinEvent(arena, winners);
         Bukkit.getPluginManager().callEvent(event);
 
-        if (blockParty.isTimoCloud()) {
-            TimoCloudAPI.getBukkitAPI().getThisServer().setState("RESTART");
-        }
+        // FIX: Pakai helper reflection
+        blockParty.setTimoCloudState("RESTART");
     }
 
     @Override
     public void run() {
-        // FIX: Guard — jangan lanjut kalau udah di-cancel (arena reset / game ended)
         if (cancelled) return;
 
         if (arena.isEnableParticles()) {
             arena.getFloor().playParticles(5, 3, 10);
         }
 
-        // Tick 0: place new floor (kecuali first enter)
         if (currentTick == 0) {
             if (firstEnter) {
                 firstEnter = false;
@@ -146,7 +137,6 @@ public class GamePhase implements Runnable {
         }
 
         if (currentTick < preparingTimeTicks) {
-            // --- FASE DANCE (lantai baru sudah diplace, suruh cari warna) ---
             if (firstPrepareEnter) {
                 RoundStartEvent event = new RoundStartEvent(arena);
                 Bukkit.getPluginManager().callEvent(event);
@@ -155,7 +145,6 @@ public class GamePhase implements Runnable {
             Util.showActionBar(ACTIONBAR_DANCE.toString(), arena, true);
 
         } else if (currentTick < (currentTimeToSearchTicks + preparingTimeTicks)) {
-            // --- FASE SEARCH (countdown, player harus stand di blok yg bener) ---
             if (firstDanceEnter) {
                 arena.getFloor().pickBlock();
 
@@ -167,9 +156,8 @@ public class GamePhase implements Runnable {
                 firstDanceEnter = false;
             }
 
-            // Hitung sisa detik — pakai integer tick, no float drift
             int ticksLeft = (currentTimeToSearchTicks + preparingTimeTicks) - currentTick;
-            int secondsLeft = (ticksLeft + 9) / 10; // ceil division biar ngga jump dari 8 ke 7 kelewat
+            int secondsLeft = (ticksLeft + 9) / 10;
 
             RoundPrepareEvent event = new RoundPrepareEvent(secondsLeft, arena, colorBlock);
             Bukkit.getPluginManager().callEvent(event);
@@ -177,7 +165,6 @@ public class GamePhase implements Runnable {
             this.blockParty.getDisplayScoreboard().setScoreboard(secondsLeft, currentLevel + 1, arena);
 
         } else if (currentTick < (currentTimeToSearchTicks + preparingTimeTicks + stopTimeTicks)) {
-            // --- FASE STOP (remove blok yg salah, player jatuh ke-eliminate) ---
             if (firstStopEnter) {
                 arena.getSongManager().pause(this.blockParty);
                 arena.setGameState(GameState.STOP);
@@ -187,7 +174,6 @@ public class GamePhase implements Runnable {
             Util.showActionBar(ACTIONBAR_STOP.toString(), arena, true);
 
         } else {
-            // --- TRANSISI KE LEVEL BERIKUTNYA ---
             if (currentLevel < levelAmount) {
                 currentLevel++;
             } else {
@@ -195,11 +181,9 @@ public class GamePhase implements Runnable {
                 return;
             }
 
-            currentTick = -1; // akan jadi 0 setelah increment di akhir
-            // Kurangi waktu search per level (konversi ke ticks)
+            currentTick = -1;
             double newTimeToSearch = (currentTimeToSearchTicks / 10.0)
                     - (timeReductionPerLevel / (1 + timeModifier * currentLevel));
-            // Pastikan minimal 1 detik
             currentTimeToSearchTicks = Math.max(10, (int) Math.round(newTimeToSearch * 10));
 
             firstStopEnter = true;
@@ -214,9 +198,6 @@ public class GamePhase implements Runnable {
         currentTick++;
     }
 
-    /**
-     * Sisa waktu dalam detik (untuk kompatibilitas kode lain).
-     */
     public double getTimeRemaining() {
         int ticksLeft = (currentTimeToSearchTicks + preparingTimeTicks) - currentTick;
         return Math.max(0, ticksLeft / 10.0);

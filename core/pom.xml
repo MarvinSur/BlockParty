@@ -22,18 +22,18 @@
             <id>jitpack.io</id>
             <url>https://jitpack.io</url>
         </repository>
-        <!-- FIX: bstats pindah ke CodeMC (HTTPS), repo bstats.org lama (HTTP) mati -->
+        <!-- bstats pindah ke CodeMC (HTTPS), repo bstats.org lama HTTP mati -->
         <repository>
             <id>CodeMC</id>
             <url>https://repo.codemc.org/repository/maven-public</url>
         </repository>
-        <!-- NOTE: repo TimoCloud (maven.timo.cloud) DIHAPUS — 503 permanen.
-             TimoCloud-API diinstall manual via workflow step 'Install TimoCloud-API'. -->
+        <!-- NOTE: TimoCloud repo DIHAPUS (503 permanen).
+             TimoCloud dependency juga DIHAPUS dari sini — integrasi sekarang
+             pakai reflection di BlockParty.setTimoCloudState(), tidak butuh JAR saat compile. -->
     </repositories>
 
     <dependencies>
 
-        <!--Spigot API-->
         <dependency>
             <groupId>org.spigotmc</groupId>
             <artifactId>spigot-api</artifactId>
@@ -48,7 +48,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Java-WebSocket -->
         <dependency>
             <groupId>org.java-websocket</groupId>
             <artifactId>Java-WebSocket</artifactId>
@@ -56,7 +55,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- Jetty -->
         <dependency>
             <groupId>org.eclipse.jetty.aggregate</groupId>
             <artifactId>jetty-all</artifactId>
@@ -65,7 +63,6 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- MCJukebox -->
         <dependency>
             <groupId>com.github.oliverdunk</groupId>
             <artifactId>JukeboxAPI</artifactId>
@@ -73,7 +70,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- NoteBlockAPI -->
         <dependency>
             <groupId>com.github.koca2000</groupId>
             <artifactId>NoteBlockAPI</artifactId>
@@ -81,7 +77,6 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- bStats — dari CodeMC -->
         <dependency>
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
@@ -93,15 +88,6 @@
             <groupId>com.google.code.findbugs</groupId>
             <artifactId>jsr305</artifactId>
             <version>3.0.2</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- TimoCloud-API — diinstall manual di CI via mvn install:install-file
-             karena maven.timo.cloud 503. Scope provided karena opsional runtime. -->
-        <dependency>
-            <groupId>cloud.timo.TimoCloud</groupId>
-            <artifactId>TimoCloud-API</artifactId>
-            <version>5.3.1</version>
             <scope>provided</scope>
         </dependency>
 
@@ -141,7 +127,6 @@
                 </configuration>
             </plugin>
 
-            <!-- Shade JAR -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
@@ -179,7 +164,6 @@
                 <artifactId>maven-jar-plugin</artifactId>
                 <version>3.2.0</version>
             </plugin>
-
         </plugins>
 
         <resources>
@@ -188,7 +172,6 @@
                 <filtering>true</filtering>
             </resource>
         </resources>
-
     </build>
 
 </project>

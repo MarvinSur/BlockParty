@@ -32,116 +32,54 @@ import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
 
-/**
- * Created by Leon on 14.03.2018.
- * Project Blockparty2
- * © 2018 - Leon Koth
- */
 public class BlockParty {
 
     public static final boolean DEBUG = false;
     public static final String PLUGIN_NAME = "BlockParty";
     public static final String PLUGIN_FOLDER = "plugins/" + PLUGIN_NAME + "/";
 
-    @Getter
-    private IBlockPlacer blockPlacer;
+    @Getter private IBlockPlacer blockPlacer;
+    @Getter private DisplayScoreboard displayScoreboard;
+    @Getter private static BlockParty instance;
+    @Getter private boolean bungee;
+    @Getter private ExecutorService executorService;
+    @Getter private ScheduledExecutorService scheduledExecutorService;
+    @Getter private String defaultArena;
+    @Getter private List<Arena> arenas;
+    @Getter private Database database;
+    @Getter private JavaPlugin plugin;
+    @Getter private Config config;
+    @Getter private List<PlayerInfo> players;
+    @Getter private WebServer webServer;
+    @Getter private PlayerInfoManager playerInfoManager;
+    @Getter private String tablePrefix;
+    @Getter private List<String> disabledSubCommands = new ArrayList<>();
+    @Getter private String arenaChatFormat;
+    @Getter private boolean arenaPrivateChat, signsEnabled;
+    @Getter private int signUpdateMillis;
+    @Getter private int signUpdaterTask;
+    @Getter private Issue issue;
+    @Getter private HttpClient client;
 
-    @Getter
-    private DisplayScoreboard displayScoreboard;
+    // Broadcast config
+    @Getter private boolean broadcastGlobalJoinLeave;
+    @Getter private boolean broadcastGlobalCountdown;
+    @Getter private boolean broadcastGlobalWinner;
+    @Getter private boolean broadcastGlobalActionbar;
 
-    @Getter
-    private static BlockParty instance;
-
-    @Getter
-    private boolean bungee;
-
-    @Getter
-    private ExecutorService executorService;
-
-    @Getter
-    private ScheduledExecutorService scheduledExecutorService;
-
-    @Getter
-    private String defaultArena;
-
-    @Getter
-    private List<Arena> arenas;
-
-    @Getter
-    private Database database;
-
-    @Getter
-    private JavaPlugin plugin;
-
-    @Getter
-    private Config config;
-
-    @Getter
-    private List<PlayerInfo> players;
-
-    @Getter
-    private WebServer webServer;
-
-    @Getter
-    private PlayerInfoManager playerInfoManager;
-
-    @Getter
-    private String tablePrefix;
-
-    @Getter
-    private List<String> disabledSubCommands = new ArrayList<>();
-
-    @Getter
-    private String arenaChatFormat;
-
-    @Getter
-    private boolean arenaPrivateChat, signsEnabled;
-
-    @Getter
-    private int signUpdateMillis;
-
-    @Getter
-    private int signUpdaterTask;
-
-    @Getter
-    private Issue issue;
-
-    @Getter
-    private HttpClient client;
-
-    // --- Broadcast config ---
-    @Getter
-    private boolean broadcastGlobalJoinLeave;
-
-    @Getter
-    private boolean broadcastGlobalCountdown;
-
-    @Getter
-    private boolean broadcastGlobalWinner;
-
-    @Getter
-    private boolean broadcastGlobalActionbar;
-
-    // --- AutoJoin config ---
-    @Getter
-    private boolean autoJoinEnabled;
-
-    @Getter
-    private String autoJoinPreferredArena;
+    // AutoJoin config
+    @Getter private boolean autoJoinEnabled;
+    @Getter private String autoJoinPreferredArena;
 
     public BlockParty(JavaPlugin plugin, Config config, ExecutorService executorService, ScheduledExecutorService scheduledExecutorService) {
         instance = this;
-
         displayScoreboard = new DisplayScoreboard();
-
         this.config = config;
         this.plugin = plugin;
         this.executorService = executorService;
         this.scheduledExecutorService = scheduledExecutorService;
-
         VersionHandler.init();
         blockPlacer = VersionHandler.getBlockPlacer();
-
         if (DEBUG) {
             System.out.println("[BlockParty] Using DEBUG mode");
             System.out.println("[BlockParty] Detected Minecraft Version: " + MinecraftVersion.CURRENT_VERSION);
@@ -151,18 +89,13 @@ public class BlockParty {
     public void load() {
         DefaultManager.copyAll();
         BlockPartyLocale.init();
-
         this.tablePrefix = config.getConfig().getString("Database.TablePrefix");
-
         this.database = initDatabase();
         this.webServer = initWebServer();
-
         BlockPartyLocale.loadLocale(new File(PLUGIN_FOLDER + "Locale/" + config.getConfig().getString("LocaleFileName")));
-
     }
 
     public void start() {
-
         this.playerInfoManager = new PlayerInfoManager(database);
         this.players = this.playerInfoManager.loadAll();
         this.arenas = this.loadAllArenas();
@@ -180,7 +113,6 @@ public class BlockParty {
                     "There will be some API restrictions and /bp reportbug won't work.");
         }
 
-        // Init listeners
         new AsyncPlayerChatListener(this);
         new AsyncPlayerPreLoginListener(this);
         new BlockBreakListener(this);
@@ -207,40 +139,30 @@ public class BlockParty {
         new RoundStartListener(this);
         new ServerListPingListener(this);
         new SignChangeListener(this);
-        //new UIListener(this.getPlugin());
         new CommandListener(this);
-
-        // Init commands
         new BlockPartyCommand(this);
     }
 
     public void stop() {
-
-        if(Bukkit.getScheduler().isCurrentlyRunning(this.signUpdaterTask)) {
+        if (Bukkit.getScheduler().isCurrentlyRunning(this.signUpdaterTask)) {
             Bukkit.getScheduler().cancelTask(this.signUpdaterTask);
         }
-
         Iterator<Boost> iterator = Boost.boosts.iterator();
-        while(iterator.hasNext()) {
+        while (iterator.hasNext()) {
             iterator.next().remove();
         }
-
         for (Set<BlockInfo> blocks : BlockPartyUndoCommand.oldBlocks.values()) {
             for (BlockInfo blockInfo : blocks) {
                 blockInfo.restore();
             }
         }
         BlockPartyUndoCommand.oldBlocks.clear();
-
         for (PlayerInfo playerInfo : PlayerInfo.getAllPlayerInfos()) {
             if (!bungee && playerInfo.getPlayerData() != null) {
                 playerInfo.getPlayerData().apply(playerInfo.asPlayer());
             }
         }
-
-        if (config.getConfig().getBoolean("SaveOnDisable"))
-            Arena.saveAll();
-
+        if (config.getConfig().getBoolean("SaveOnDisable")) Arena.saveAll();
         if (webServer != null) {
             try {
                 this.webServer.stop();
@@ -248,7 +170,6 @@ public class BlockParty {
                 Bukkit.getConsoleSender().sendMessage("§c[BlockParty] Couldn't stop MusicServer");
             }
         }
-
         this.getPlayerInfoManager().saveAllPlayerInfos(this.getPlayers());
     }
 
@@ -262,33 +183,25 @@ public class BlockParty {
 
     private WebServer initWebServer() {
         WebServer webServer = null;
-
         if (config.getConfig().getBoolean("MusicServer.Enabled")) {
             switch (config.getConfig().getString("MusicServer.WebSocketLibrary").toLowerCase()) {
-
                 case "websocket":
                     webServer = new WebSocketServer(new InetSocketAddress(config.getConfig().getInt("MusicServer.Port")), this);
                     break;
-
                 case "jetty":
                     webServer = new JettyWebServer(config.getConfig().getInt("MusicServer.Port"));
                     break;
-
                 case "tcp/ip":
                     webServer = new XWebSocketServer(config.getConfig().getInt("MusicServer.Port"));
                     break;
-
                 case "mcjukebox":
                     webServer = new MCJukeboxConnector(this);
                     break;
-
                 default:
                     logStartMessage(false);
                     break;
             }
-
             boolean started = false;
-
             if (webServer != null) {
                 try {
                     webServer.start();
@@ -301,59 +214,41 @@ public class BlockParty {
         } else {
             logStartMessage(false);
         }
-
         return webServer;
     }
 
     private Database initDatabase() {
-
         Database database;
-
         String databaseMethod = config.getConfig().getString("Database.Method");
         if ("MySQL".equalsIgnoreCase(databaseMethod)) {
-
             String host = config.getConfig().getString("Database.MySQLOptions.Host");
             int port = config.getConfig().getInt("Database.MySQLOptions.Port");
             String user = config.getConfig().getString("Database.MySQLOptions.Username");
             String databaseName = config.getConfig().getString("Database.MySQLOptions.Database");
             String password = config.getConfig().getString("Database.MySQLOptions.Password");
-
             database = new Database(this, host, port, user, password, databaseName);
         } else {
-
             String fileName = config.getConfig().getString("Database.SQLOptions.FileName");
             database = new Database(this, fileName);
         }
-
         return database;
     }
 
     private List<Arena> loadAllArenas() {
         List<Arena> arenas = new ArrayList<>();
         File folder = new File(PLUGIN_FOLDER + "Arenas/");
-
         File[] files = folder.listFiles();
-
-        if (files == null) {
-            return arenas;
-        }
-
+        if (files == null) return arenas;
         for (File file : files) {
-
-            if (!file.isFile())
-                continue;
-
+            if (!file.isFile()) continue;
             try {
                 Arena arena = Arena.loadFromFile(FileUtils.removeExtension(file.getName()));
                 arenas.add(arena);
             } catch (Exception e) {
                 Bukkit.getConsoleSender().sendMessage("§c[BlockParty] File \"" + file.getName() + "\" couldn't be loaded!");
-
-                if (DEBUG)
-                    e.printStackTrace();
+                if (DEBUG) e.printStackTrace();
             }
         }
-
         return arenas;
     }
 
@@ -362,50 +257,37 @@ public class BlockParty {
             for (Arena arena : arenas) {
                 arena.getArenaDataManager().reload();
             }
-
             config.reload();
-
             BlockPartyLocale.loadLocale(new File(PLUGIN_FOLDER + "Locale/" + config.getConfig().getString("LocaleFileName")));
-
             if (config.getConfig().isConfigurationSection("BungeeCord")) {
                 this.bungee = config.getConfig().getBoolean("BungeeCord.Enabled");
                 this.defaultArena = config.getConfig().getString("BungeeCord.DefaultArena");
             }
-
             if (config.getConfig().isList("DisabledSubCommands")) {
                 disabledSubCommands = config.getConfig().getStringList("DisabledSubCommands");
             }
-
             if (config.getConfig().isString("Chat.ArenaChatFormat")) {
                 arenaChatFormat = ChatColor.translateAlternateColorCodes('&', config.getConfig().getString("Chat.ArenaChatFormat"));
             } else {
                 arenaChatFormat = null;
             }
-
-            if (config.getConfig().isInt("JoinSigns.UpdateMillis")) {
-                signUpdateMillis = config.getConfig().getInt("JoinSigns.UpdateMillis");
-            } else {
-                signUpdateMillis = 2500;
-            }
-
+            signUpdateMillis = config.getConfig().isInt("JoinSigns.UpdateMillis")
+                    ? config.getConfig().getInt("JoinSigns.UpdateMillis") : 2500;
             arenaPrivateChat = !config.getConfig().isBoolean("Chat.ArenaPrivateChat") || config.getConfig().getBoolean("Chat.ArenaPrivateChat");
             signsEnabled = !config.getConfig().isBoolean("JoinSigns.Enabled") || config.getConfig().isBoolean("JoinSigns.Enabled");
 
-            // Broadcast config
             broadcastGlobalJoinLeave = config.getConfig().getBoolean("Broadcast.GlobalJoinLeave", true);
-            broadcastGlobalCountdown  = config.getConfig().getBoolean("Broadcast.GlobalCountdown", true);
-            broadcastGlobalWinner     = config.getConfig().getBoolean("Broadcast.GlobalWinner", true);
-            broadcastGlobalActionbar  = config.getConfig().getBoolean("Broadcast.GlobalActionbar", true);
+            broadcastGlobalCountdown = config.getConfig().getBoolean("Broadcast.GlobalCountdown", true);
+            broadcastGlobalWinner    = config.getConfig().getBoolean("Broadcast.GlobalWinner", true);
+            broadcastGlobalActionbar = config.getConfig().getBoolean("Broadcast.GlobalActionbar", true);
 
-            // AutoJoin config
             autoJoinEnabled        = config.getConfig().getBoolean("AutoJoin.Enabled", false);
             autoJoinPreferredArena = config.getConfig().getString("AutoJoin.PreferredArena", "");
 
-            if(Bukkit.getScheduler().isCurrentlyRunning(signUpdaterTask)) {
+            if (Bukkit.getScheduler().isCurrentlyRunning(signUpdaterTask)) {
                 Bukkit.getScheduler().cancelTask(signUpdaterTask);
             }
-
-            this.signUpdaterTask = Arena.startUpdatingSigns(signUpdateMillis  / 50);
+            this.signUpdaterTask = Arena.startUpdatingSigns(signUpdateMillis / 50);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -417,13 +299,28 @@ public class BlockParty {
     }
 
     /**
-     * Cari arena yang paling banyak playernya dan masih bisa join (LOBBY atau allowJoinDuringGame).
+     * Set state ke TimoCloud via reflection — TIDAK perlu TimoCloud JAR saat compile.
+     * Kalau TimoCloud tidak diinstall di server, method ini diam-diam skip.
+     * Equivalent: TimoCloudAPI.getBukkitAPI().getThisServer().setState(state)
+     */
+    public void setTimoCloudState(String state) {
+        if (!isTimoCloud()) return;
+        try {
+            Class<?> apiClass = Class.forName("cloud.timo.TimoCloud.api.TimoCloudAPI");
+            Object bukkitApi = apiClass.getMethod("getBukkitAPI").invoke(null);
+            Object thisServer = bukkitApi.getClass().getMethod("getThisServer").invoke(bukkitApi);
+            thisServer.getClass().getMethod("setState", String.class).invoke(thisServer, state);
+        } catch (Exception e) {
+            Bukkit.getConsoleSender().sendMessage("§e[BlockParty] Could not set TimoCloud state '" + state + "': " + e.getMessage());
+        }
+    }
+
+    /**
+     * Cari arena yang paling banyak playernya dan masih bisa join.
      * Kalau PreferredArena di-set, prioritaskan itu.
      */
     public Arena findBestAutoJoinArena() {
         if (!autoJoinEnabled || arenas == null || arenas.isEmpty()) return null;
-
-        // Coba preferred arena dulu
         if (autoJoinPreferredArena != null && !autoJoinPreferredArena.isEmpty()) {
             Arena preferred = Arena.getByName(autoJoinPreferredArena);
             if (preferred != null && preferred.isEnabled()
@@ -431,8 +328,6 @@ public class BlockParty {
                 return preferred;
             }
         }
-
-        // Fallback: arena dengan player terbanyak yang masih bisa join
         Arena best = null;
         int maxPlayers = -1;
         for (Arena arena : arenas) {

@@ -21,23 +21,6 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # FIX: maven.timo.cloud 503 (repo mati permanen).
-      # Download TimoCloud-API JAR langsung dari GitHub Releases
-      # dan install ke local Maven repo supaya bisa di-resolve saat build.
-      - name: Install TimoCloud-API to local Maven repo
-        run: |
-          curl -L \
-            "https://github.com/TimoCloud/TimoCloud/releases/download/5.3.1/TimoCloud-API-5.3.1.jar" \
-            -o TimoCloud-API-5.3.1.jar
-          mvn install:install-file \
-            -Dfile=TimoCloud-API-5.3.1.jar \
-            -DgroupId=cloud.timo.TimoCloud \
-            -DartifactId=TimoCloud-API \
-            -Dversion=5.3.1 \
-            -Dpackaging=jar \
-            -DgeneratePom=true \
-            -q
-
       - name: Build with Maven
         run: mvn -B --no-transfer-progress clean package -DskipTests
 
