@@ -27,14 +27,12 @@
             <id>CodeMC</id>
             <url>https://repo.codemc.org/repository/maven-public</url>
         </repository>
-        <repository>
-            <id>TimoCloud-API</id>
-            <url>https://maven.timo.cloud/repository/TimoCloud-API/</url>
-        </repository>
+        <!-- NOTE: repo TimoCloud (maven.timo.cloud) DIHAPUS — 503 permanen.
+             TimoCloud-API diinstall manual via workflow step 'Install TimoCloud-API'. -->
     </repositories>
 
     <dependencies>
-        
+
         <!--Spigot API-->
         <dependency>
             <groupId>org.spigotmc</groupId>
@@ -83,7 +81,7 @@
             <scope>provided</scope>
         </dependency>
 
-        <!-- bStats — ambil dari CodeMC -->
+        <!-- bStats — dari CodeMC -->
         <dependency>
             <groupId>org.bstats</groupId>
             <artifactId>bstats-bukkit</artifactId>
@@ -98,6 +96,8 @@
             <scope>provided</scope>
         </dependency>
 
+        <!-- TimoCloud-API — diinstall manual di CI via mvn install:install-file
+             karena maven.timo.cloud 503. Scope provided karena opsional runtime. -->
         <dependency>
             <groupId>cloud.timo.TimoCloud</groupId>
             <artifactId>TimoCloud-API</artifactId>
@@ -123,7 +123,6 @@
 
     <build>
         <plugins>
-            <!-- Compiler -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
@@ -132,8 +131,6 @@
                     <source>8</source>
                     <target>8</target>
                     <encoding>UTF-8</encoding>
-                    <!-- FIX: annotationProcessorPaths biar Lombok diproses langsung
-                         tanpa perlu lombok-maven-plugin yang error sourceDirectory-nya -->
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
@@ -143,10 +140,6 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
-
-            <!-- FIX: Hapus lombok-maven-plugin — sourceDirectory "/src" itu absolute path
-                 yang cuma works di Windows build lokal lo, bukan di Linux CI.
-                 Lombok cukup diproses via annotationProcessorPaths di compiler plugin di atas. -->
 
             <!-- Shade JAR -->
             <plugin>
