@@ -19,16 +19,9 @@
     </modules>
     <packaging>pom</packaging>
     <name>BlockParty</name>
-    
-    <repositories>
-        <repository>
-            <id>elmakers</id>
-            <url>https://maven.elmakers.com/repository/</url>
-        </repository>
-    </repositories>
 
     <dependencies>
-        <!-- Lombok -->
+        <!-- Lombok — provided ke semua module -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
@@ -36,5 +29,32 @@
             <scope>provided</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <!-- FIX: Default compiler config untuk semua module:
+                     Lombok diproses via annotationProcessorPaths,
+                     bukan lombok-maven-plugin yang error di CI Linux. -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.8.1</version>
+                    <configuration>
+                        <source>1.8</source>
+                        <target>1.8</target>
+                        <encoding>UTF-8</encoding>
+                        <annotationProcessorPaths>
+                            <path>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                                <version>1.18.12</version>
+                            </path>
+                        </annotationProcessorPaths>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
 
 </project>

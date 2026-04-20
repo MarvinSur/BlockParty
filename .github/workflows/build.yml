@@ -14,7 +14,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Java (Temurin 17 + cache Maven)
+      - name: Setup Java 8 (Temurin + Maven cache)
         uses: actions/setup-java@v4
         with:
           java-version: '8'
@@ -22,12 +22,27 @@ jobs:
           cache: maven
 
       - name: Build with Maven
-        run: mvn -B clean package -DskipTests
+        run: >
+          mvn -B --no-transfer-progress clean package -DskipTests
+          -Dmaven.wagon.http.ssl.insecure=true
+          -Dmaven.wagon.http.ssl.allowall=true
+          -Dhttp.keepAlive=false
+        env:
+          MAVEN_OPTS: >
+            -Dmaven.resolver.transport=wagon
+            -Daether.connector.https.securityMode=insecure
 
-      - name: Collect JARs
+      - name: Collect final JAR
         run: |
           mkdir -p build-artifacts
-          find . -name "*.jar" -path "*/target/*" -exec cp {} build-artifacts/ \;
+          # JAR utama ada di root target/ (karena dist/pom.xml set <directory>../target</directory>)
+          find . -maxdepth 2 -name "BlockParty-*.jar" -path "*/target/*" -exec cp {} build-artifacts/ \;
+          # Fallback: kalau tidak ada di root target, ambil semua JAR dari semua modul
+          if [ -z "$(ls -A build-artifacts)" ]; then
+            find . -name "*.jar" -path "*/target/*" ! -name "*-sources.jar" ! -name "*-javadoc.jar" -exec cp {} build-artifacts/ \;
+          fi
+          echo "=== Artifacts found ==="
+          ls -lh build-artifacts/
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -36,4 +51,3 @@ jobs:
           path: build-artifacts/
           if-no-files-found: error
           retention-days: 7
-          
