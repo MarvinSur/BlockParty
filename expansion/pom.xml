@@ -18,11 +18,9 @@
             <id>spigot</id>
             <url>https://hub.spigotmc.org/nexus/content/repositories/snapshots/</url>
         </repository>
-        <!-- FIX: repo.extendedclip.com pakai HTTP → diblokir Maven 3.8+.
-             PlaceholderAPI tersedia di PaperMC repo (HTTPS). -->
         <repository>
-            <id>papermc</id>
-            <url>https://repo.papermc.io/repository/maven-public/</url>
+            <id>placeholderapi</id>
+            <url>https://repo.helpch.at/releases/</url>
         </repository>
     </repositories>
 
@@ -36,7 +34,7 @@
         <dependency>
             <groupId>me.clip</groupId>
             <artifactId>placeholderapi</artifactId>
-            <version>2.10.3</version>
+            <version>2.12.2</version>
             <scope>provided</scope>
         </dependency>
         <dependency>
