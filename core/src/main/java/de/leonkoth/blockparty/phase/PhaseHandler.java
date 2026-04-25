@@ -14,10 +14,6 @@ import java.util.List;
  * Created by Leon on 16.03.2018.
  * Project Blockparty2
  * © 2016 - Leon Koth
- *
- * FIX: cancelGamePhase() sekarang juga memanggil gamePhase.cancel() untuk
- * mencegah run() lama masih jalan 1 tick setelah scheduler di-cancel.
- * Tambah cancelAll() untuk dipakai Arena.reset().
  */
 public class PhaseHandler {
 
@@ -45,45 +41,74 @@ public class PhaseHandler {
     }
 
     public boolean startLobbyPhase() {
-        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers()
-                && !scheduler.isCurrentlyRunning(lobbyPhaseScheduler)
-                && !scheduler.isQueued(lobbyPhaseScheduler)) {
-            arena.setArenaState(ArenaState.LOBBY);
-            this.lobbyPhase = new LobbyPhase(blockParty, arena.getName());
-            this.lobbyPhase.initialize();
-            this.lobbyPhaseScheduler = scheduler.scheduleSyncRepeatingTask(blockParty.getPlugin(), lobbyPhase, 0L, 20L);
-            return true;
-        } else {
+        // FIX ROOT CAUSE: Harus cek ArenaState == LOBBY dulu.
+        // Tanpa ini, setiap player join arena (termasuk saat INGAME/ENDING)
+        // bisa trigger startLobbyPhase() → lobby countdown jalan di tengah game.
+        if (arena.getArenaState() != ArenaState.LOBBY) {
             return false;
         }
+
+        if (this.arena.getPlayersInArena().size() < arena.getMinPlayers()) {
+            return false;
+        }
+
+        // Jangan start kalau lobby scheduler sudah jalan
+        if (scheduler.isCurrentlyRunning(lobbyPhaseScheduler)
+                || scheduler.isQueued(lobbyPhaseScheduler)) {
+            return false;
+        }
+
+        this.lobbyPhase = new LobbyPhase(blockParty, arena.getName());
+        this.lobbyPhase.initialize();
+        this.lobbyPhaseScheduler = scheduler.scheduleSyncRepeatingTask(
+                blockParty.getPlugin(), lobbyPhase, 0L, 20L);
+        return true;
     }
 
     public boolean startGamePhase() {
-        if (this.arena.getPlayersInArena().size() >= arena.getMinPlayers()
-                && !scheduler.isCurrentlyRunning(gamePhaseScheduler)
-                && !scheduler.isQueued(gamePhaseScheduler)) {
-            arena.setArenaState(ArenaState.INGAME);
-            this.gamePhase = new GamePhase(blockParty, arena.getName());
-            this.gamePhase.initialize();
-            this.gamePhaseScheduler = scheduler.scheduleSyncRepeatingTask(blockParty.getPlugin(), gamePhase, 0L, 2L);
-            this.cancelLobbyPhase();
-            return true;
-        } else {
+        // Harus dari state LOBBY, bukan INGAME/ENDING
+        if (arena.getArenaState() != ArenaState.LOBBY) {
             return false;
         }
+
+        if (this.arena.getPlayersInArena().size() < arena.getMinPlayers()) {
+            return false;
+        }
+
+        if (scheduler.isCurrentlyRunning(gamePhaseScheduler)
+                || scheduler.isQueued(gamePhaseScheduler)) {
+            return false;
+        }
+
+        arena.setArenaState(ArenaState.INGAME);
+        this.gamePhase = new GamePhase(blockParty, arena.getName());
+        this.gamePhase.initialize();
+        this.gamePhaseScheduler = scheduler.scheduleSyncRepeatingTask(
+                blockParty.getPlugin(), gamePhase, 0L, 2L);
+        this.cancelLobbyPhase();
+        return true;
     }
 
     public boolean startWinningPhase(List<PlayerInfo> winner) {
-        if (!scheduler.isCurrentlyRunning(winnerPhaseScheduler)
-                && !scheduler.isCurrentlyRunning(gamePhaseScheduler)
-                && !scheduler.isQueued(winnerPhaseScheduler)
-                && !scheduler.isQueued(gamePhaseScheduler)) {
-            this.winnerPhase = new WinnerPhase(blockParty, arena, winner);
-            winnerPhaseScheduler = scheduler.scheduleSyncRepeatingTask(blockParty.getPlugin(), winnerPhase, 0L, 20L);
-            return true;
-        } else {
+        // Hanya bisa mulai dari state INGAME
+        if (arena.getArenaState() != ArenaState.INGAME
+                && arena.getArenaState() != ArenaState.ENDING) {
             return false;
         }
+
+        if (scheduler.isCurrentlyRunning(winnerPhaseScheduler)
+                || scheduler.isQueued(winnerPhaseScheduler)) {
+            return false;
+        }
+
+        // Tandai game phase selesai sebelum start winner
+        gamePhase.cancel();
+
+        arena.setArenaState(ArenaState.ENDING);
+        this.winnerPhase = new WinnerPhase(blockParty, arena, winner);
+        winnerPhaseScheduler = scheduler.scheduleSyncRepeatingTask(
+                blockParty.getPlugin(), winnerPhase, 0L, 20L);
+        return true;
     }
 
     public void cancelLobbyPhase() {
@@ -94,19 +119,11 @@ public class PhaseHandler {
         Bukkit.getScheduler().cancelTask(winnerPhaseScheduler);
     }
 
-    /**
-     * FIX: Cancel scheduler DAN set flag cancelled di GamePhase,
-     * supaya run() yang mungkin sedang antri di queue ngga jalan lagi.
-     */
     public void cancelGamePhase() {
-        gamePhase.cancel(); // FIX: tandai cancelled dulu
+        gamePhase.cancel();
         Bukkit.getScheduler().cancelTask(gamePhaseScheduler);
     }
 
-    /**
-     * FIX: Cancel semua scheduler sekaligus. Dipanggil oleh Arena.reset()
-     * sebelum membuat PhaseHandler baru, supaya ngga ada scheduler zombie.
-     */
     public void cancelAll() {
         cancelLobbyPhase();
         cancelGamePhase();
