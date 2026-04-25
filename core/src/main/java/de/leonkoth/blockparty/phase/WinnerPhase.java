@@ -18,9 +18,10 @@ import java.util.List;
 public class WinnerPhase implements Runnable {
 
     private int countdown;
+    private boolean ended = false;
     private BlockParty blockParty;
     private Arena arena;
-    private List<PlayerInfo> winner = null;
+    private List<PlayerInfo> winner;
 
     public WinnerPhase(BlockParty blockParty, Arena arena) {
         this(blockParty, arena, null);
@@ -34,6 +35,8 @@ public class WinnerPhase implements Runnable {
     }
 
     private void endGame() {
+        if (ended) return;
+        ended = true;
         GameEndEvent event = new GameEndEvent(arena);
         Bukkit.getPluginManager().callEvent(event);
     }
@@ -41,22 +44,30 @@ public class WinnerPhase implements Runnable {
     @Override
     public void run() {
         if (countdown < 0) {
+            // FIX: null check sebelum teleport — winner bisa offline selama 10 detik
+            // Tanpa ini → NPE → endGame() tidak dipanggil → arena stuck di ENDING selamanya
             if (this.winner == null) {
                 for (PlayerInfo playerInfo : arena.getPlayersInArena()) {
                     if (playerInfo.getPlayerState() == PlayerState.WINNER) {
-                        playerInfo.asPlayer().teleport(arena.getLobbySpawn());
+                        Player p = playerInfo.asPlayer();
+                        if (p != null) p.teleport(arena.getLobbySpawn());
                     }
                 }
             } else {
                 for (PlayerInfo playerInfo : this.winner) {
-                    playerInfo.asPlayer().teleport(arena.getLobbySpawn());
+                    Player p = playerInfo.asPlayer();
+                    if (p != null) p.teleport(arena.getLobbySpawn());
                 }
             }
             endGame();
-        } else {
-            if (arena.isEnableFireworksOnWin() && winner != null) {
-                for (PlayerInfo playerInfo : this.winner) {
-                    RandomFireworkGenerator.shootRandomFirework(playerInfo.asPlayer().getLocation(), 3);
+            return;
+        }
+
+        if (arena.isEnableFireworksOnWin() && winner != null) {
+            for (PlayerInfo playerInfo : this.winner) {
+                Player p = playerInfo.asPlayer();
+                if (p != null) {
+                    RandomFireworkGenerator.shootRandomFirework(p.getLocation(), 3);
                 }
             }
         }

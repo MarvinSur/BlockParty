@@ -36,11 +36,6 @@ import java.util.List;
 
 import static de.leonkoth.blockparty.arena.ArenaState.LOBBY;
 
-/**
- * Created by Leon on 14.03.2018.
- * Project Blockparty2
- * © 2016 - Leon Koth
- */
 public class Arena {
 
     public static final double TIME_REDUCTION_PER_LEVEL = 0.5;
@@ -54,32 +49,13 @@ public class Arena {
 
     private BlockParty blockParty;
 
-    @Getter
-    private ArenaDataSet data;
-
-    @Setter
-    @Getter
-    private ArenaDataManager arenaDataManager;
-
-    @Setter
-    @Getter
-    private ArenaState arenaState;
-
-    @Setter
-    @Getter
-    private GameState gameState;
-
-    @Setter
-    @Getter
-    private List<PlayerInfo> playersInArena;
-
-    @Setter
-    @Getter
-    private PhaseHandler phaseHandler;
-
-    @Setter
-    @Getter
-    private ParticlePlayer particlePlayer;
+    @Getter private ArenaDataSet data;
+    @Setter @Getter private ArenaDataManager arenaDataManager;
+    @Setter @Getter private ArenaState arenaState;
+    @Setter @Getter private GameState gameState;
+    @Setter @Getter private List<PlayerInfo> playersInArena;
+    @Setter @Getter private PhaseHandler phaseHandler;
+    @Setter @Getter private ParticlePlayer particlePlayer;
 
     public Arena(String name, BlockParty blockParty, boolean save) {
         this.blockParty = blockParty;
@@ -123,124 +99,94 @@ public class Arena {
         this.phaseHandler = new PhaseHandler(blockParty, this);
         this.particlePlayer = ParticlePlayerProvider.get(Particles.CLOUD);
 
-        if (save)
-            this.saveData();
+        if (save) this.saveData();
     }
 
     public static boolean create(String name) {
-        if (isLoaded(name)) {
-            return false;
-        }
-
+        if (isLoaded(name)) return false;
         BlockParty blockParty = BlockParty.getInstance();
         Arena arena = new Arena(name, blockParty, true);
         blockParty.getArenas().add(arena);
-
         return true;
     }
 
     public static Arena loadFromFile(String name) {
         BlockParty blockParty = BlockParty.getInstance();
         Arena arena;
-
         if (Arena.isLoaded(name)) {
             arena = Arena.getByName(name);
         } else {
             arena = new Arena(name, blockParty, false);
             arena.arenaDataManager.loadData();
         }
-
         return arena;
     }
 
     public static Arena getByName(String name) {
         for (Arena arena : BlockParty.getInstance().getArenas()) {
-            if (arena.getName().equals(name)) {
-                return arena;
-            }
+            if (arena.getName().equals(name)) return arena;
         }
-
         return null;
     }
 
     public static int startUpdatingSigns(int ticks) {
-
         return Bukkit.getScheduler().scheduleSyncRepeatingTask(BlockParty.getInstance().getPlugin(), () -> {
             if (BlockParty.getInstance().isSignsEnabled()) {
                 BlockParty.getInstance().getArenas().forEach(Arena::updateSigns);
             }
         }, 0, ticks);
-
     }
 
     public static boolean isLoaded(String name) {
-
-        if (BlockParty.getInstance().getArenas() == null)
-            return false;
-
+        if (BlockParty.getInstance().getArenas() == null) return false;
         for (Arena arena : BlockParty.getInstance().getArenas()) {
-            if (arena.getName().equals(name)) {
-                return true;
-            }
+            if (arena.getName().equals(name)) return true;
         }
-
         return false;
     }
 
     public static void saveAll() {
-        for (Arena arena : BlockParty.getInstance().getArenas()) {
-            arena.save();
-        }
+        for (Arena arena : BlockParty.getInstance().getArenas()) arena.save();
     }
 
     public void reset() {
-
         if (isAutoKick()) {
             kickAllPlayers();
         } else {
+            // FIX: satu loop — reset state player DAN berikan inventory items sekaligus
             for (PlayerInfo playerInfo : playersInArena) {
                 Player player = playerInfo.asPlayer();
                 if (player == null) continue;
+
+                // Reset state: SPECTATING/WINNER/INGAME semua jadi INLOBBY
+                if (playerInfo.getPlayerState() != PlayerState.DEFAULT) {
+                    playerInfo.setPlayerState(PlayerState.INLOBBY);
+                }
+                playerInfo.setCurrentArena(this);
+
                 player.getInventory().clear();
                 player.teleport(data.lobbySpawn);
                 player.setHealth(20);
                 player.setFoodLevel(20);
-                player.getInventory().clear();
                 player.setGameMode(GameMode.ADVENTURE);
                 player.setLevel(0);
                 player.setExp(0);
-                playerInfo.setCurrentArena(this);
                 player.getInventory().setItem(8, ItemType.LEAVEARENA.getItem());
-                player.getInventory().setItem(7, ItemType.VOTEFORASONG.getItem());
+                if (isEnableVoteItem())
+                    player.getInventory().setItem(7, ItemType.VOTEFORASONG.getItem());
                 player.updateInventory();
-            }
-        }
-
-        // FIX: Reset semua state player SPECTATING ke INLOBBY supaya mereka bisa ikut ronde berikutnya
-        for (PlayerInfo playerInfo : playersInArena) {
-            if (playerInfo.getPlayerState() == PlayerState.SPECTATING
-                    || playerInfo.getPlayerState() == PlayerState.WINNER) {
-                playerInfo.setPlayerState(PlayerState.INLOBBY);
-                Player player = playerInfo.asPlayer();
-                if (player != null) {
-                    player.setGameMode(GameMode.ADVENTURE);
-                }
             }
         }
 
         this.arenaState = ArenaState.LOBBY;
         this.gameState = GameState.WAIT;
 
-        // FIX: cancelAll() dulu sebelum dispose PhaseHandler lama.
-        // Ini mencegah scheduler GamePhase/WinnerPhase zombie yang masih jalan
-        // setelah reset dan menyebabkan FloorPlaceEvent terpanggil di lobby baru.
         this.phaseHandler.cancelAll();
         this.phaseHandler = new PhaseHandler(blockParty, this);
 
         this.data.floor.setStartFloor();
         this.data.songManager.setVotedSong(null);
         this.phaseHandler.startLobbyPhase();
-
     }
 
     public void save() {
@@ -256,32 +202,20 @@ public class Arena {
     }
 
     public PlayerJoinArenaEvent addPlayer(Player player) {
-
         PlayerInfo playerInfo = PlayerInfo.getFromPlayer(player);
-
         if (playerInfo == null) {
             blockParty.getPlayers().add(new PlayerInfo(player.getName(), player.getUniqueId(), 0, 0, 0));
             playerInfo = PlayerInfo.getFromPlayer(player);
         }
-
         PlayerJoinArenaEvent event = new PlayerJoinArenaEvent(this, player, playerInfo);
         Bukkit.getPluginManager().callEvent(event);
-
         return event;
     }
 
-    /**
-     * Call the {@link PlayerLeaveArenaEvent}.
-     *
-     * @param player the player leaving the arena
-     * @return if the event was NOT cancelled
-     */
     private boolean callPlayerLeaveArenaEvent(Player player) {
-
         PlayerInfo playerInfo = PlayerInfo.getFromPlayer(player);
         PlayerLeaveArenaEvent event = new PlayerLeaveArenaEvent(this, player, playerInfo);
         Bukkit.getPluginManager().callEvent(event);
-
         return !event.isCancelled();
     }
 
@@ -290,12 +224,9 @@ public class Arena {
     }
 
     public boolean removePattern(String name) {
-
         if (data.floor.getPatternNames().contains(name)) {
             data.floor.getPatternNames().remove(name);
-
-            data.floor.getFloorPatterns().removeIf(pattern -> pattern.getName().equals(name)); // Java 8
-
+            data.floor.getFloorPatterns().removeIf(pattern -> pattern.getName().equals(name));
             arenaDataManager.getConfig().set("configuration.Floor.EnabledFloors", data.floor.getPatternNames());
             try {
                 arenaDataManager.save();
@@ -303,10 +234,8 @@ public class Arena {
                 e.printStackTrace();
                 return false;
             }
-
             return true;
         }
-
         return false;
     }
 
@@ -320,69 +249,50 @@ public class Arena {
     public void updateSigns() {
         Iterator<Location> iterator = data.signs.getSigns().iterator();
         boolean save = false;
-
-
         while (iterator.hasNext()) {
             Location location = iterator.next();
             Block block = location.getBlock();
-
             if (VersionedMaterial.SIGN.equals(block.getType())) {
                 Sign sign = (Sign) block.getState();
                 String[] lines = new String[4];
-
                 if (!isEnabled()) {
                     lines = getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.Disabled");
                 } else {
                     switch (arenaState) {
                         case LOBBY:
-                            if (getPlayersInArena().size() >= getMaxPlayers()) {
-                                lines = getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.LobbyFull");
-                            } else {
-                                lines = getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.Lobby");
-                            }
+                            lines = getPlayersInArena().size() >= getMaxPlayers()
+                                    ? getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.LobbyFull")
+                                    : getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.Lobby");
                             break;
-
                         case INGAME:
                             lines = getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.Ingame");
                             break;
-
                         case ENDING:
                             lines = getLines(blockParty.getConfig().getConfig(), "JoinSigns.Lines.Ending");
                             break;
                     }
                 }
-                for (int i = 0; i < 4; i++) {
-                    sign.setLine(i, lines[i]);
-                }
-
+                for (int i = 0; i < 4; i++) sign.setLine(i, lines[i]);
                 sign.update();
-
             } else {
                 iterator.remove();
                 save = true;
             }
         }
-
-        if (save)
-            arenaDataManager.save(data);
+        if (save) arenaDataManager.save(data);
     }
 
     private String[] getLines(FileConfiguration config, String path) {
         String[] arr = new String[4];
         for (int i = 1; i <= 4; i++) {
             String newPath = path + "." + i;
-
-            if (!config.isString(newPath)) {
-                continue;
-            }
-
+            if (!config.isString(newPath)) continue;
             arr[i - 1] = ChatColor.translateAlternateColorCodes('&', config.getString(newPath))
                     .replace("%ARENA%", data.name)
                     .replace("%PLAYERS%", Integer.toString(playersInArena.size()))
                     .replace("%MAX_PLAYERS%", Integer.toString(data.maxPlayers))
                     .replace("%ALIVE%", Integer.toString(getIngamePlayers()));
         }
-
         return arr;
     }
 
@@ -391,22 +301,14 @@ public class Arena {
     }
 
     public void broadcast(LocaleString prefix, LocaleString message, boolean onlyIngame, PlayerInfo[] exceptions, String... placeholders) {
-
         playerLoop:
         for (PlayerInfo playerInfo : playersInArena) {
-
             if (exceptions != null) {
                 for (PlayerInfo exception : exceptions) {
-                    if (playerInfo.equals(exception)) {
-                        continue playerLoop;
-                    }
+                    if (playerInfo.equals(exception)) continue playerLoop;
                 }
             }
-
-            if (onlyIngame && playerInfo.getPlayerState() != PlayerState.INGAME) {
-                continue;
-            }
-
+            if (onlyIngame && playerInfo.getPlayerState() != PlayerState.INGAME) continue;
             message.message(prefix, playerInfo.asPlayer(), placeholders);
         }
     }
@@ -422,7 +324,6 @@ public class Arena {
             callPlayerLeaveArenaEvent(playerInfo.asPlayer());
             iterator.remove();
         }
-
         blockParty.getArenas().remove(this);
         arenaDataManager.delete();
     }
@@ -438,16 +339,11 @@ public class Arena {
             if (info.getPlayerState() == PlayerState.INGAME || info.getPlayerState() == PlayerState.WINNER)
                 ingamePlayers++;
         }
-
         return ingamePlayers;
     }
 
-    // Can be collapsed in IntelliJ IDEA
-    // region Some getters/setters
-
     public void addSign(Location location) {
-        if (data.signs == null)
-            data.signs = new SignList();
+        if (data.signs == null) data.signs = new SignList();
         data.signs.add(location);
         arenaDataManager.save(data);
     }
@@ -458,141 +354,52 @@ public class Arena {
     }
 
     @Override
-    public String toString() {
-        return getName();
-    }
+    public String toString() { return getName(); }
 
-    public int getDistanceToOutArea() {
-        return data.distanceToOutArea;
-    }
-
-    public int getTimeToSearch() {
-        return data.timeToSearch;
-    }
-
-    public int getLevelAmount() {
-        return data.levelAmount;
-    }
-
-    public int getMinPlayers() {
-        return data.minPlayers;
-    }
-
-    public int getMaxPlayers() {
-        return data.maxPlayers;
-    }
-
-    public int getLobbyCountdown() {
-        return data.lobbyCountdown;
-    }
-
-    public double getTimeReductionPerLevel() {
-        return data.timeReductionPerLevel;
-    }
-
-    public double getTimeModifier() {
-        return data.timeModifier;
-    }
-
-    public boolean isEnabled() {
-        return data.enabled;
-    }
-
-    public boolean isEnableParticles() {
-        return data.enableParticles;
-    }
-
-    public boolean isEnableLightnings() {
-        return data.enableLightnings;
-    }
-
-    public boolean isAutoRestart() {
-        return data.autoRestart;
-    }
-
-    public boolean isAutoKick() {
-        return data.autoKick;
-    }
-
-    public boolean isEnableBoosts() {
-        return data.enableBoosts;
-    }
-
-    public boolean isEnableFallingBlocks() {
-        return data.enableFallingBlocks;
-    }
-
-    public boolean isUseAutoGeneratedFloors() {
-        return data.useAutoGeneratedFloors;
-    }
-
-    public boolean isUsePatternFloors() {
-        return data.usePatternFloors;
-    }
-
-    public boolean isEnableActionbarInfo() {
-        return data.enableActionbarInfo;
-    }
-
-    public boolean isEnableScoreboard() {
-        return data.enableScoreboard;
-    }
-
-    public boolean isUseNoteBlockSongs() {
-        return data.useNoteBlockSongs;
-    }
-
-    public boolean isUseWebSongs() {
-        return data.useWebSongs;
-    }
-
-    public boolean isEnableFireworksOnWin() {
-        return data.enableFireworksOnWin;
-    }
-
-    public boolean isTimerResetOnPlayerJoin() {
-        return data.timerResetOnPlayerJoin;
-    }
-
-    public boolean isAllowJoinDuringGame() {
-        return data.allowJoinDuringGame;
-    }
-
-    public boolean isEnableJoinMessage()  { return data.enableJoinMessage; }
-
-    public boolean isEnableSpectatorMode()  { return data.enableSpectatorMode; }
-
-    public boolean isEnableVoteItem()  { return data.enableVoteItem; }
-
-    public String getName() {
-        return data.name;
-    }
-
-    public SongManager getSongManager() {
-        return data.songManager;
-    }
-
-    public Floor getFloor() {
-        return data.floor;
-    }
+    public int getDistanceToOutArea() { return data.distanceToOutArea; }
+    public int getTimeToSearch() { return data.timeToSearch; }
+    public int getLevelAmount() { return data.levelAmount; }
+    public int getMinPlayers() { return data.minPlayers; }
+    public int getMaxPlayers() { return data.maxPlayers; }
+    public int getLobbyCountdown() { return data.lobbyCountdown; }
+    public double getTimeReductionPerLevel() { return data.timeReductionPerLevel; }
+    public double getTimeModifier() { return data.timeModifier; }
+    public boolean isEnabled() { return data.enabled; }
+    public boolean isEnableParticles() { return data.enableParticles; }
+    public boolean isEnableLightnings() { return data.enableLightnings; }
+    public boolean isAutoRestart() { return data.autoRestart; }
+    public boolean isAutoKick() { return data.autoKick; }
+    public boolean isEnableBoosts() { return data.enableBoosts; }
+    public boolean isEnableFallingBlocks() { return data.enableFallingBlocks; }
+    public boolean isUseAutoGeneratedFloors() { return data.useAutoGeneratedFloors; }
+    public boolean isUsePatternFloors() { return data.usePatternFloors; }
+    public boolean isEnableActionbarInfo() { return data.enableActionbarInfo; }
+    public boolean isEnableScoreboard() { return data.enableScoreboard; }
+    public boolean isUseNoteBlockSongs() { return data.useNoteBlockSongs; }
+    public boolean isUseWebSongs() { return data.useWebSongs; }
+    public boolean isEnableFireworksOnWin() { return data.enableFireworksOnWin; }
+    public boolean isTimerResetOnPlayerJoin() { return data.timerResetOnPlayerJoin; }
+    public boolean isAllowJoinDuringGame() { return data.allowJoinDuringGame; }
+    public boolean isEnableJoinMessage() { return data.enableJoinMessage; }
+    public boolean isEnableSpectatorMode() { return data.enableSpectatorMode; }
+    public boolean isEnableVoteItem() { return data.enableVoteItem; }
+    public String getName() { return data.name; }
+    public SongManager getSongManager() { return data.songManager; }
+    public Floor getFloor() { return data.floor; }
 
     public void setFloor(Floor floor) {
         data.floor = floor;
         arenaDataManager.save(data);
     }
 
-    public Location getGameSpawn() {
-        return data.gameSpawn;
-    }
+    public Location getGameSpawn() { return data.gameSpawn; }
 
     public void setGameSpawn(Location gameSpawn) {
         data.gameSpawn = gameSpawn;
         arenaDataManager.save(data);
     }
 
-    public Location getLobbySpawn() {
-        return data.lobbySpawn;
-    }
+    public Location getLobbySpawn() { return data.lobbySpawn; }
 
     public void setLobbySpawn(Location lobbySpawn) {
         data.lobbySpawn = lobbySpawn;
@@ -604,21 +411,15 @@ public class Arena {
         arenaDataManager.save(data);
     }
 
-    public SignList getSigns() {
-        return data.signs;
-    }
+    public SignList getSigns() { return data.signs; }
 
     public Collection<Player> getPlayers() {
         List<Player> list = new LinkedList<>();
         for (PlayerInfo playerInfo : this.playersInArena) {
             Player player = playerInfo.asPlayer();
-            if (player != null) {
-                list.add(player);
-            }
+            if (player != null) list.add(player);
         }
         return list;
     }
-
-    // endregion
 
 }
