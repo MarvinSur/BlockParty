@@ -22,7 +22,6 @@ public class PlayerEliminateListener implements Listener {
 
     public PlayerEliminateListener(BlockParty blockParty) {
         this.blockParty = blockParty;
-
         Bukkit.getPluginManager().registerEvents(this, blockParty.getPlugin());
     }
 
@@ -33,18 +32,27 @@ public class PlayerEliminateListener implements Listener {
         Player player = event.getPlayer();
         PlayerInfo playerInfo = event.getPlayerInfo();
 
+        // FIX BUG 1: Jangan proses eliminate kalau player sudah SPECTATING atau bukan INGAME.
+        // Tanpa guard ini, player yang jatuh saat SPECTATING (misal join-during-game)
+        // bisa trigger eliminate lagi → checkForWin() salah count → game tidak punya winner.
+        if (playerInfo.getPlayerState() != PlayerState.INGAME) {
+            return;
+        }
+
         if (arena.isEnableLightnings()) {
             player.getWorld().strikeLightningEffect(player.getLocation());
         }
 
-        int c = 0;
+        // Hitung ingame players SEBELUM set state ke SPECTATING
+        int ingameCount = 0;
         for (PlayerInfo pi : arena.getPlayersInArena()) {
             if (pi.getPlayerState() == PlayerState.INGAME) {
-                c++;
+                ingameCount++;
             }
         }
 
-        int a = 10 - c;
+        // Poin bonus berdasarkan sisa player
+        int a = 10 - ingameCount;
         if (a > 0) {
             playerInfo.setPoints(playerInfo.getPoints() + a);
             this.blockParty.getPlayerInfoManager().savePlayerInfo(playerInfo);
@@ -58,7 +66,11 @@ public class PlayerEliminateListener implements Listener {
         player.updateInventory();
         arena.broadcast(PREFIX, PLAYER_ELIMINATED, false, (PlayerInfo[]) null, "%PLAYER%", playerInfo.getName());
 
-        if (arena.getArenaState() == ArenaState.INGAME || arena.getArenaState() == ArenaState.ENDING) {
+        // FIX BUG 2: Cek win SETELAH state di-update ke SPECTATING.
+        // Sebelumnya checkForWin() dipanggil sebelum setPlayerState, jadi saat
+        // penghitungan, player yang baru di-eliminate masih dihitung INGAME.
+        // Akibatnya: tinggal 1 player tapi checkForWin() hitung 2 → game tidak selesai.
+        if (arena.getArenaState() == ArenaState.INGAME) {
             arena.getPhaseHandler().getGamePhase().checkForWin();
         }
     }

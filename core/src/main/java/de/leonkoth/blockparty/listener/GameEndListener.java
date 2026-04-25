@@ -2,15 +2,16 @@ package de.leonkoth.blockparty.listener;
 
 import de.leonkoth.blockparty.BlockParty;
 import de.leonkoth.blockparty.arena.Arena;
-import de.leonkoth.blockparty.event.GameEndEvent;
 import de.leonkoth.blockparty.player.PlayerInfo;
 import de.leonkoth.blockparty.player.PlayerState;
+import de.leonkoth.blockparty.phase.PhaseHandler;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import de.leonkoth.blockparty.event.GameEndEvent;
 
 import static de.leonkoth.blockparty.locale.BlockPartyLocale.LEFT_GAME;
 
@@ -20,7 +21,6 @@ public class GameEndListener implements Listener {
 
     public GameEndListener(BlockParty blockParty) {
         this.blockParty = blockParty;
-
         Bukkit.getPluginManager().registerEvents(this, blockParty.getPlugin());
     }
 
@@ -28,13 +28,11 @@ public class GameEndListener implements Listener {
     public void onGameEnd(GameEndEvent event) {
         Arena arena = event.getArena();
 
-        for (PlayerInfo playerInfo : arena.getPlayersInArena())
-        {
-            if(playerInfo.getPlayerState() == PlayerState.SPECTATING)
-            {
+        // Teleport spectator ke lobby spawn
+        for (PlayerInfo playerInfo : arena.getPlayersInArena()) {
+            if (playerInfo.getPlayerState() == PlayerState.SPECTATING) {
                 Player player = playerInfo.asPlayer();
-                if(player.getGameMode() == GameMode.SPECTATOR)
-                {
+                if (player != null && player.getGameMode() == GameMode.SPECTATOR) {
                     player.teleport(arena.getLobbySpawn());
                     player.setGameMode(GameMode.SURVIVAL);
                 }
@@ -51,8 +49,11 @@ public class GameEndListener implements Listener {
             return;
         }
 
-        arena.reset();
-
+        // FIX BUG 5: Delay reset 1 tick supaya semua event (WinnerPhase teleport, dll)
+        // selesai diproses dulu sebelum scheduler baru dibuat.
+        // Tanpa delay ini, PhaseHandler baru bisa dibuat saat scheduler lama
+        // masih ada di queue antrian Bukkit → race condition → lobby dobel.
+        Bukkit.getScheduler().runTaskLater(blockParty.getPlugin(), arena::reset, 1L);
     }
 
 }
