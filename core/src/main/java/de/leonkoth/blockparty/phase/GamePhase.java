@@ -18,22 +18,26 @@ import static de.leonkoth.blockparty.locale.BlockPartyLocale.ACTIONBAR_DANCE;
 import static de.leonkoth.blockparty.locale.BlockPartyLocale.ACTIONBAR_STOP;
 
 /**
- * Created by Leon on 15.03.2018.
- * Project Blockparty2
- * © 2016 - Leon Koth
+ * FIX: Added Sudden Death mode.
+ * When all levels are exhausted but >1 player remains,
+ * the game enters Sudden Death: timeToSearch is locked at minimum (1 second),
+ * preparingTime is reduced to 3 seconds, and rounds keep going until
+ * only 1 player survives. The game will NEVER end with multiple winners.
  *
- * FIX: Removed direct TimoCloud import (cloud.timo.TimoCloud.api.TimoCloudAPI).
- * TimoCloud integration is now done via reflection inside BlockParty.setTimoCloudState()
- * so this class compiles without the TimoCloud JAR on the classpath.
- *
- * FIX: Replaced all double-based time tracking with integer tick counters
- * to eliminate floating point drift bugs on high-load servers (80+ players).
+ * FIX: Replaced all double-based time tracking with integer tick counters.
+ * FIX: Removed direct TimoCloud import — now uses reflection via BlockParty.setTimoCloudState().
  */
 public class GamePhase implements Runnable {
 
+    // Minimum search time: 1 detik = 10 ticks
+    private static final int MIN_SEARCH_TICKS = 10;
+    // Preparing time normal: 5 detik = 50 ticks
+    private static final int NORMAL_PREPARE_TICKS = 50;
+    // Preparing time saat sudden death: 3 detik = 30 ticks (lebih cepat, lebih tegang)
+    private static final int SUDDEN_DEATH_PREPARE_TICKS = 30;
+
     private boolean firstStopEnter = true, firstDanceEnter = true, firstPrepareEnter = true, firstEnter = true;
 
-    // Semua waktu dalam satuan TICKS (10 tick = 1 detik, scheduler jalan tiap 2L)
     private int timeToSearchTicks, currentTimeToSearchTicks, currentTick;
     private int stopTimeTicks, preparingTimeTicks;
 
@@ -44,6 +48,10 @@ public class GamePhase implements Runnable {
     private int stopTime = 4;
 
     private boolean cancelled = false;
+
+    // Sudden death flag — aktif kalau level habis tapi masih >1 player
+    private boolean suddenDeath = false;
+    private int suddenDeathRound = 0;
 
     private BlockParty blockParty;
     private Arena arena;
@@ -64,7 +72,7 @@ public class GamePhase implements Runnable {
         this.timeModifier = arena.getTimeModifier();
         this.levelAmount = arena.getLevelAmount();
         this.stopTimeTicks = stopTime * 10;
-        this.preparingTimeTicks = 5 * 10;
+        this.preparingTimeTicks = NORMAL_PREPARE_TICKS;
         this.currentTick = 0;
     }
 
@@ -88,7 +96,6 @@ public class GamePhase implements Runnable {
         GameStartEvent event = new GameStartEvent(arena);
         Bukkit.getPluginManager().callEvent(event);
 
-        // FIX: Pakai helper reflection — tidak perlu import TimoCloud langsung
         blockParty.setTimoCloudState("INGAME");
     }
 
@@ -115,8 +122,35 @@ public class GamePhase implements Runnable {
         PlayerWinEvent event = new PlayerWinEvent(arena, winners);
         Bukkit.getPluginManager().callEvent(event);
 
-        // FIX: Pakai helper reflection
         blockParty.setTimoCloudState("RESTART");
+    }
+
+    /**
+     * Masuk ke mode Sudden Death.
+     * Level dikunci minimum, prepare time dipercepat, dan game lanjut terus
+     * sampai benar-benar tinggal 1 player.
+     */
+    private void enterSuddenDeath() {
+        if (!suddenDeath) {
+            suddenDeath = true;
+            // Broadcast ke semua player di arena
+            for (PlayerInfo playerInfo : arena.getPlayersInArena()) {
+                org.bukkit.entity.Player p = playerInfo.asPlayer();
+                if (p != null) {
+                    p.sendMessage(org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                            "&c&l⚡ SUDDEN DEATH! &7Bertahan sampai akhir!"));
+                    p.sendTitle(
+                            org.bukkit.ChatColor.RED + "" + org.bukkit.ChatColor.BOLD + "SUDDEN DEATH",
+                            org.bukkit.ChatColor.YELLOW + "Hanya 1 pemenang!",
+                            5, 40, 10
+                    );
+                }
+            }
+        }
+        suddenDeathRound++;
+        // Sudden death: search time minimum, prepare time lebih pendek
+        currentTimeToSearchTicks = MIN_SEARCH_TICKS;
+        preparingTimeTicks = SUDDEN_DEATH_PREPARE_TICKS;
     }
 
     @Override
@@ -141,8 +175,23 @@ public class GamePhase implements Runnable {
                 RoundStartEvent event = new RoundStartEvent(arena);
                 Bukkit.getPluginManager().callEvent(event);
                 firstPrepareEnter = false;
+
+                // Broadcast info sudden death round di awal setiap round
+                if (suddenDeath) {
+                    for (PlayerInfo playerInfo : arena.getPlayersInArena()) {
+                        org.bukkit.entity.Player p = playerInfo.asPlayer();
+                        if (p != null) {
+                            p.sendMessage(org.bukkit.ChatColor.RED + "⚡ Sudden Death Round " + suddenDeathRound
+                                    + " | " + org.bukkit.ChatColor.YELLOW + getActivePlayerAmount() + " players left");
+                        }
+                    }
+                }
             }
-            Util.showActionBar(ACTIONBAR_DANCE.toString(), arena, true);
+            if (suddenDeath) {
+                Util.showActionBar("&c&l⚡ SUDDEN DEATH &7- Round " + suddenDeathRound, arena, true);
+            } else {
+                Util.showActionBar(ACTIONBAR_DANCE.toString(), arena, true);
+            }
 
         } else if (currentTick < (currentTimeToSearchTicks + preparingTimeTicks)) {
             if (firstDanceEnter) {
@@ -174,17 +223,30 @@ public class GamePhase implements Runnable {
             Util.showActionBar(ACTIONBAR_STOP.toString(), arena, true);
 
         } else {
-            if (currentLevel < levelAmount) {
-                currentLevel++;
-            } else {
+            // --- Akhir satu round ---
+
+            // Cek dulu apakah ada yang perlu di-eliminate (yang berdiri di blok salah)
+            // sebelum transisi level — checkForWin akan handle kalau tinggal 1 player
+            if (getActivePlayerAmount() <= 1) {
                 this.finishGame();
                 return;
             }
 
+            if (!suddenDeath && currentLevel < levelAmount) {
+                // Normal level progression
+                currentLevel++;
+                double newTimeToSearch = (currentTimeToSearchTicks / 10.0)
+                        - (timeReductionPerLevel / (1 + timeModifier * currentLevel));
+                currentTimeToSearchTicks = Math.max(MIN_SEARCH_TICKS,
+                        (int) Math.round(newTimeToSearch * 10));
+
+            } else {
+                // FIX: Level habis ATAU sudah sudden death — masuk/lanjut sudden death
+                // Jangan finishGame() kalau masih >1 player
+                enterSuddenDeath();
+            }
+
             currentTick = -1;
-            double newTimeToSearch = (currentTimeToSearchTicks / 10.0)
-                    - (timeReductionPerLevel / (1 + timeModifier * currentLevel));
-            currentTimeToSearchTicks = Math.max(10, (int) Math.round(newTimeToSearch * 10));
 
             firstStopEnter = true;
             firstDanceEnter = true;
@@ -201,6 +263,10 @@ public class GamePhase implements Runnable {
     public double getTimeRemaining() {
         int ticksLeft = (currentTimeToSearchTicks + preparingTimeTicks) - currentTick;
         return Math.max(0, ticksLeft / 10.0);
+    }
+
+    public boolean isSuddenDeath() {
+        return suddenDeath;
     }
 
 }
