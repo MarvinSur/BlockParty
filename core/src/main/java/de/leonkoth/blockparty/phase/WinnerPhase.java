@@ -7,6 +7,7 @@ import de.leonkoth.blockparty.player.PlayerInfo;
 import de.leonkoth.blockparty.player.PlayerState;
 import de.pauhull.utils.misc.RandomFireworkGenerator;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 
 import java.util.List;
 
@@ -44,8 +45,6 @@ public class WinnerPhase implements Runnable {
     @Override
     public void run() {
         if (countdown < 0) {
-            // FIX: null check sebelum teleport — winner bisa offline selama 10 detik
-            // Tanpa ini → NPE → endGame() tidak dipanggil → arena stuck di ENDING selamanya
             if (this.winner == null) {
                 for (PlayerInfo playerInfo : arena.getPlayersInArena()) {
                     if (playerInfo.getPlayerState() == PlayerState.WINNER) {
